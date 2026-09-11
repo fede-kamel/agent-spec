@@ -26,6 +26,18 @@ def _get_url_match_parts(url: str) -> Tuple[str, str, str]:
     return parsed_url.scheme, parsed_url.netloc, parsed_url.path or "/"
 
 
+def _path_is_within(url_path: str, pattern_path: str) -> bool:
+    """Check whether a URL path is the pattern path or one of its sub-paths.
+
+    The comparison happens on whole path segments: the pattern ``/api`` allows ``/api``,
+    ``/api/`` and ``/api/x`` but not ``/apiX``. A pattern ending with ``/`` (including the
+    root ``/`` used when the pattern has no path) allows everything under that directory.
+    """
+    if pattern_path.endswith("/"):
+        return url_path.startswith(pattern_path)
+    return url_path == pattern_path or url_path.startswith(pattern_path + "/")
+
+
 def _matches_allow_list_entry(url: str, pattern: str) -> bool:
     """Check whether a URL matches one allow-list entry."""
     url_scheme, url_netloc, url_path = _get_url_match_parts(url)
@@ -33,7 +45,7 @@ def _matches_allow_list_entry(url: str, pattern: str) -> bool:
     return (
         url_scheme == pattern_scheme
         and url_netloc == pattern_netloc
-        and url_path.startswith(pattern_path)
+        and _path_is_within(url_path, pattern_path)
     )
 
 

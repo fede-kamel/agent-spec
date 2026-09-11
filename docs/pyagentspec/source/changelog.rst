@@ -36,6 +36,13 @@ Improvements
 Bug fixes
 ^^^^^^^^^
 
+* **URL allow-list path matching on path segments**
+
+  ``url_allow_list`` entries of ``RemoteTool`` and ``ApiNode`` now match the request path on
+  whole path segments: ``https://api.example.com/orders`` allows ``/orders`` and ``/orders/123``
+  but no longer allows paths that merely start with the same characters, such as
+  ``/orders-archive``. Entries ending with ``/`` and entries without a path keep their meaning.
+
 Breaking Changes
 ^^^^^^^^^^^^^^^^
 

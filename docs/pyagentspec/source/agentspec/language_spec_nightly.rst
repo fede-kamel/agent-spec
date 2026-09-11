@@ -1070,14 +1070,15 @@ The data is passed to the request as Form Data if the header ``{"Content-Type": 
 
 The ``url_allow_list`` field is an optional list of developer-controlled URLs or URL patterns that runtimes
 or adapters can use to validate the rendered request URL. The intended matching behavior is exact matching on
-scheme and authority (host and port), together with prefix matching on the path. Query parameters, URL params,
-and fragments are not used for matching.
+scheme and authority (host and port), together with prefix matching on whole path segments. Query parameters,
+URL params, and fragments are not used for matching.
 
 These patterns are simple URL prefixes rather than wildcards or regexes. For example:
 
 * ``https://example.com`` allows ``https://example.com/page`` because scheme, host, and port match and the path prefix is ``/``.
 * ``https://example.com/orders/`` allows ``https://example.com/orders/123`` and ``https://example.com/orders/123/items``.
 * ``https://example.com/orders/`` does not allow ``https://example.com/customers/123`` because the path prefix differs.
+* ``https://example.com/orders`` allows ``https://example.com/orders`` and ``https://example.com/orders/123``, but not ``https://example.com/orders-archive`` because the path prefix must end on a path segment.
 * ``http://example.com/orders/`` does not allow ``https://example.com/orders/123`` because the scheme differs.
 
 For higher security, authors should strongly prefer configuring ``url_allow_list`` whenever templating is used in
