@@ -20,6 +20,10 @@ from pyagentspec.llms.ociclientconfig import OciClientConfigWithApiKey
 from pyagentspec.llms.ocigenaiconfig import ModelProvider, OciAPIType, OciGenAiConfig, ServingMode
 from pyagentspec.retrypolicy import RetryPolicy
 
+from ..conftest import OCI_TEST_API_KEY_PROFILE as API_KEY_PROFILE
+from ..conftest import OCI_TEST_COMPARTMENT_ID as COMPARTMENT_ID
+from ..conftest import OCI_TEST_SERVICE_ENDPOINT as SERVICE_ENDPOINT
+
 # Imported at collection time: importing the OCI SDK reads platform files that the per-test
 # file-access guard does not allow.
 pytest.importorskip("oci_openai")
@@ -31,9 +35,6 @@ from pyagentspec.adapters._oci_openai_common import (  # noqa: E402
     OCI_OPENAI_PLACEHOLDER_API_KEY,
 )
 
-SERVICE_ENDPOINT = "https://inference.generativeai.us-chicago-1.oci.oraclecloud.com"
-COMPARTMENT_ID = "ocid1.compartment.oc1..aaaaaaaafakecompartment"
-API_KEY_PROFILE = "APIKEY"
 MODEL_ID = "openai.gpt-4.1"
 
 CHAT_COMPLETION_RESPONSE: Dict[str, Any] = {
@@ -73,32 +74,6 @@ RESPONSES_API_RESPONSE: Dict[str, Any] = {
         "total_tokens": 2,
     },
 }
-
-
-@pytest.fixture
-def oci_config_file(tmp_path: Path) -> Path:
-    """An OCI configuration file with an API key profile backed by a generated key."""
-    from cryptography.hazmat.primitives import serialization
-    from cryptography.hazmat.primitives.asymmetric import rsa
-
-    private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
-    key_file = tmp_path / "oci_api_key.pem"
-    key_file.write_bytes(
-        private_key.private_bytes(
-            encoding=serialization.Encoding.PEM,
-            format=serialization.PrivateFormat.TraditionalOpenSSL,
-            encryption_algorithm=serialization.NoEncryption(),
-        )
-    )
-    config_file = tmp_path / "config"
-    config_file.write_text(f"""[{API_KEY_PROFILE}]
-user=ocid1.user.oc1..aaaaaaaafakeuser
-fingerprint=aa:bb:cc:dd:ee:ff:00:11:22:33:44:55:66:77:88:99
-tenancy=ocid1.tenancy.oc1..aaaaaaaafaketenancy
-region=us-chicago-1
-key_file={key_file}
-""")
-    return config_file
 
 
 def _client_config(config_file: Path) -> OciClientConfigWithApiKey:
