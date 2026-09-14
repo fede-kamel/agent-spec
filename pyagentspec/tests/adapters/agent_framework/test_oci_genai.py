@@ -26,7 +26,7 @@ from ..conftest import OCI_TEST_SERVICE_ENDPOINT as SERVICE_ENDPOINT
 
 # Imported at collection time: importing the OCI SDK reads platform files that the per-test
 # file-access guard does not allow.
-pytest.importorskip("oci_openai")
+pytest.importorskip("oci_genai_auth")
 
 from pyagentspec.adapters import _oci_openai_common  # noqa: E402
 from pyagentspec.adapters._oci_openai_common import (  # noqa: E402
@@ -132,7 +132,7 @@ def recorded_requests(monkeypatch: pytest.MonkeyPatch) -> List[httpx.Request]:
 def test_oci_config_converts_to_a_signed_openai_client(
     oci_config_file: Path, api_type: OciAPIType, expected_client_name: str
 ) -> None:
-    import oci_openai
+    import oci_genai_auth
     from agent_framework.openai import OpenAIChatClient, OpenAIChatCompletionClient
 
     from pyagentspec.adapters.agent_framework import AgentSpecLoader
@@ -152,7 +152,7 @@ def test_oci_config_converts_to_a_signed_openai_client(
     http_client = openai_client._client
     assert http_client.headers[COMPARTMENT_ID_HEADER] == COMPARTMENT_ID
     assert http_client.headers["accept-encoding"] == OCI_OPENAI_ACCEPT_ENCODING
-    assert isinstance(http_client.auth, oci_openai.OciUserPrincipalAuth)
+    assert isinstance(http_client.auth, oci_genai_auth.OciUserPrincipalAuth)
 
 
 def test_retry_policy_configures_the_openai_client(oci_config_file: Path) -> None:

@@ -9,7 +9,7 @@
 The OCI Generative AI service exposes OpenAI-compatible ``chat/completions`` and ``responses``
 endpoints under ``<service_endpoint>/openai/v1``. Requests must carry an OCI request signature
 and the target compartment in the ``opc-compartment-id`` header. The request signing is provided
-by the ``oci-openai`` package, which offers ``httpx.Auth`` implementations for the four OCI
+by the ``oci-genai-auth`` package, which offers ``httpx.Auth`` implementations for the four OCI
 authentication types modelled by the Agent Spec ``OciClientConfig`` components.
 
 These helpers are shared by the runtime adapters built on the ``openai`` SDK (AutoGen, Microsoft
@@ -58,19 +58,19 @@ every streamed chunk as an independent zstd frame, which the ``httpx`` decoder r
 """
 
 OCI_OPENAI_INSTALL_HINT = (
-    "The `oci-openai` package is required to run OCI Generative AI models through the "
-    "OpenAI-compatible API. Install it with `pip install oci-openai` "
+    "The `oci-genai-auth` package is required to run OCI Generative AI models through the "
+    "OpenAI-compatible API. Install it with `pip install oci-genai-auth` "
     "(or `pip install pyagentspec[oci]`)."
 )
 
 
 def ensure_oci_openai_installed() -> ModuleType:
-    """Return the ``oci_openai`` module, raising an actionable error when it is missing."""
+    """Return the ``oci_genai_auth`` module, raising an actionable error when it is missing."""
     try:
-        import oci_openai  # type: ignore
+        import oci_genai_auth  # type: ignore
     except ImportError as exc:
         raise ImportError(OCI_OPENAI_INSTALL_HINT) from exc
-    return oci_openai
+    return oci_genai_auth
 
 
 def get_oci_service_endpoint(llm_config: OciGenAiConfig) -> str:
@@ -137,21 +137,21 @@ def validate_oci_openai_compatible_config(
 
 def create_oci_httpx_auth(client_config: OciClientConfig) -> "httpx.Auth":
     """Create the ``httpx`` authentication signing requests for an OCI client configuration."""
-    oci_openai = ensure_oci_openai_installed()
+    oci_genai_auth = ensure_oci_openai_installed()
     if isinstance(client_config, OciClientConfigWithSecurityToken):
-        return oci_openai.OciSessionAuth(  # type: ignore[no-any-return]
+        return oci_genai_auth.OciSessionAuth(  # type: ignore[no-any-return]
             config_file=os.path.expanduser(client_config.auth_file_location),
             profile_name=client_config.auth_profile,
         )
     if isinstance(client_config, OciClientConfigWithApiKey):
-        return oci_openai.OciUserPrincipalAuth(  # type: ignore[no-any-return]
+        return oci_genai_auth.OciUserPrincipalAuth(  # type: ignore[no-any-return]
             config_file=os.path.expanduser(client_config.auth_file_location),
             profile_name=client_config.auth_profile,
         )
     if isinstance(client_config, OciClientConfigWithInstancePrincipal):
-        return oci_openai.OciInstancePrincipalAuth()  # type: ignore[no-any-return]
+        return oci_genai_auth.OciInstancePrincipalAuth()  # type: ignore[no-any-return]
     if isinstance(client_config, OciClientConfigWithResourcePrincipal):
-        return oci_openai.OciResourcePrincipalAuth()  # type: ignore[no-any-return]
+        return oci_genai_auth.OciResourcePrincipalAuth()  # type: ignore[no-any-return]
     raise NotImplementedError(
         f"Unsupported OCI client configuration of type {type(client_config).__name__}"
     )
@@ -240,31 +240,31 @@ def is_oci_openai_base_url(base_url: str) -> bool:
 def oci_client_config_from_httpx_auth(
     auth: Any, *, service_endpoint: str, name: str
 ) -> Optional[OciClientConfig]:
-    """Rebuild the Agent Spec client configuration from an ``oci-openai`` authentication.
+    """Rebuild the Agent Spec client configuration from an ``oci-genai-auth`` authentication.
 
-    Returns ``None`` when the authentication is not one created by ``oci-openai``.
+    Returns ``None`` when the authentication is not one created by ``oci-genai-auth``.
     """
     try:
-        import oci_openai  # type: ignore
+        import oci_genai_auth  # type: ignore
     except ImportError:
         return None
-    if isinstance(auth, oci_openai.OciSessionAuth):
+    if isinstance(auth, oci_genai_auth.OciSessionAuth):
         return OciClientConfigWithSecurityToken(
             name=name,
             service_endpoint=service_endpoint,
             auth_file_location=auth.config_file,
             auth_profile=auth.profile_name,
         )
-    if isinstance(auth, oci_openai.OciUserPrincipalAuth):
+    if isinstance(auth, oci_genai_auth.OciUserPrincipalAuth):
         return OciClientConfigWithApiKey(
             name=name,
             service_endpoint=service_endpoint,
             auth_file_location=auth.config_file,
             auth_profile=auth.profile_name,
         )
-    if isinstance(auth, oci_openai.OciInstancePrincipalAuth):
+    if isinstance(auth, oci_genai_auth.OciInstancePrincipalAuth):
         return OciClientConfigWithInstancePrincipal(name=name, service_endpoint=service_endpoint)
-    if isinstance(auth, oci_openai.OciResourcePrincipalAuth):
+    if isinstance(auth, oci_genai_auth.OciResourcePrincipalAuth):
         return OciClientConfigWithResourcePrincipal(name=name, service_endpoint=service_endpoint)
     return None
 

@@ -25,7 +25,7 @@ from ..conftest import OCI_TEST_API_KEY_PROFILE as PROFILE
 from ..conftest import OCI_TEST_COMPARTMENT_ID as COMPARTMENT_ID
 from ..conftest import OCI_TEST_SERVICE_ENDPOINT as SERVICE_ENDPOINT
 
-pytest.importorskip("oci_openai")
+pytest.importorskip("oci_genai_auth")
 
 
 CHAT_COMPLETION_RESPONSE: Dict[str, Any] = {
@@ -72,7 +72,7 @@ def _convert(llm_config: OciGenAiConfig) -> Any:
 
 
 def test_oci_config_converts_to_a_signed_openai_client(oci_config_file: Path) -> None:
-    import oci_openai
+    import oci_genai_auth
     from autogen_ext.models.openai import OpenAIChatCompletionClient
 
     from pyagentspec.adapters._oci_openai_common import OCI_OPENAI_PLACEHOLDER_API_KEY
@@ -89,7 +89,7 @@ def test_oci_config_converts_to_a_signed_openai_client(oci_config_file: Path) ->
     http_client = openai_client._client
     assert http_client.headers["opc-compartment-id"] == COMPARTMENT_ID
     assert http_client.headers["accept-encoding"] == "gzip, deflate"
-    assert isinstance(http_client.auth, oci_openai.OciUserPrincipalAuth)
+    assert isinstance(http_client.auth, oci_genai_auth.OciUserPrincipalAuth)
     assert http_client.auth.profile_name == PROFILE
     # The signing client is not part of the serializable configuration
     assert "http_client" not in client.dump_component().config

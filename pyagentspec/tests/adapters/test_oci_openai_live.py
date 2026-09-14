@@ -42,7 +42,7 @@ pytestmark = pytest.mark.skipif(
 
 # Imported at collection time: importing the OCI SDK reads platform files that the per-test
 # file-access guard does not allow.
-pytest.importorskip("oci_openai")
+pytest.importorskip("oci_genai_auth")
 
 MULTIPLY_TOOL: Dict[str, Any] = {
     "type": "function",

@@ -168,7 +168,7 @@ setup(
             # 3rd party dependencies (imported in code)
             # OCI request signing for the OpenAI-compatible API of OCI Generative AI, used by the
             # adapters built on the `openai` SDK (AutoGen, Agent Framework, OpenAI Agents)
-            "oci-openai>=1.1.0",
+            "oci-genai-auth>=1.1.1",
         ],
         "evaluation": [
             # 3rd party dependencies (imported in code)

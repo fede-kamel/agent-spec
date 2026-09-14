@@ -29,7 +29,7 @@ from ..conftest import OCI_TEST_API_KEY_PROFILE as PROFILE
 from ..conftest import OCI_TEST_COMPARTMENT_ID as COMPARTMENT_ID
 from ..conftest import OCI_TEST_SERVICE_ENDPOINT as SERVICE_ENDPOINT
 
-pytest.importorskip("oci_openai")
+pytest.importorskip("oci_genai_auth")
 
 MODEL_ID = "openai.gpt-4.1"
 
@@ -95,7 +95,7 @@ def _convert(llm_config: OciGenAiConfig) -> Any:
 
 
 def _assert_oci_client(client: Any) -> None:
-    import oci_openai
+    import oci_genai_auth
 
     from pyagentspec.adapters._oci_openai_common import OCI_OPENAI_PLACEHOLDER_API_KEY
 
@@ -103,7 +103,7 @@ def _assert_oci_client(client: Any) -> None:
     assert client.api_key == OCI_OPENAI_PLACEHOLDER_API_KEY
     assert client._client.headers["opc-compartment-id"] == COMPARTMENT_ID
     assert client._client.headers["accept-encoding"] == "gzip, deflate"
-    assert isinstance(client._client.auth, oci_openai.OciUserPrincipalAuth)
+    assert isinstance(client._client.auth, oci_genai_auth.OciUserPrincipalAuth)
 
 
 @pytest.mark.parametrize("api_type", [OciAPIType.OCI, OciAPIType.OPENAI_CHAT_COMPLETIONS])

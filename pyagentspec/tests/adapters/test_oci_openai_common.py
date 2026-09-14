@@ -32,7 +32,7 @@ from ..adapters.conftest import OCI_TEST_COMPARTMENT_ID as COMPARTMENT_ID
 from ..adapters.conftest import OCI_TEST_SERVICE_ENDPOINT as SERVICE_ENDPOINT
 from ..adapters.conftest import OCI_TEST_SESSION_PROFILE as SESSION_PROFILE
 
-pytest.importorskip("oci_openai")
+pytest.importorskip("oci_genai_auth")
 
 from pyagentspec.adapters._oci_openai_common import (  # noqa: E402
     COMPARTMENT_ID_HEADER,
@@ -128,14 +128,14 @@ def test_headers_carry_compartment_conversation_store_and_encoding(
 def test_auth_is_created_from_each_client_config_type(
     oci_config_file: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    oci_openai = ensure_oci_openai_installed()
+    oci_genai_auth = ensure_oci_openai_installed()
 
     session_auth = create_oci_httpx_auth(_session_client_config(oci_config_file))
-    assert isinstance(session_auth, oci_openai.OciSessionAuth)
+    assert isinstance(session_auth, oci_genai_auth.OciSessionAuth)
     assert session_auth.profile_name == SESSION_PROFILE
 
     api_key_auth = create_oci_httpx_auth(_api_key_client_config(oci_config_file))
-    assert isinstance(api_key_auth, oci_openai.OciUserPrincipalAuth)
+    assert isinstance(api_key_auth, oci_genai_auth.OciUserPrincipalAuth)
     assert api_key_auth.profile_name == API_KEY_PROFILE
 
     # Principal-based authentications contact the OCI metadata service, so they are replaced
@@ -143,8 +143,8 @@ def test_auth_is_created_from_each_client_config_type(
         def __init__(self) -> None:
             self.created = True
 
-    monkeypatch.setattr(oci_openai, "OciInstancePrincipalAuth", _FakeAuth)
-    monkeypatch.setattr(oci_openai, "OciResourcePrincipalAuth", _FakeAuth)
+    monkeypatch.setattr(oci_genai_auth, "OciInstancePrincipalAuth", _FakeAuth)
+    monkeypatch.setattr(oci_genai_auth, "OciResourcePrincipalAuth", _FakeAuth)
     instance_principal = OciClientConfigWithInstancePrincipal(
         name="client_config", service_endpoint=SERVICE_ENDPOINT
     )
@@ -158,8 +158,8 @@ def test_auth_is_created_from_each_client_config_type(
 def test_missing_oci_openai_package_raises_actionable_error(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setitem(sys.modules, "oci_openai", None)
-    with pytest.raises(ImportError, match="pip install oci-openai"):
+    monkeypatch.setitem(sys.modules, "oci_genai_auth", None)
+    with pytest.raises(ImportError, match="pip install oci-genai-auth"):
         ensure_oci_openai_installed()
 
 

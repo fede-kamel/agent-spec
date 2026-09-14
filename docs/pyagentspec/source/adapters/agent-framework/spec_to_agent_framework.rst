@@ -17,7 +17,7 @@ OCI Generative AI models
 An ``OciGenAiConfig`` is executed through the OpenAI-compatible API of OCI Generative AI:
 the adapter builds an ``openai`` client that signs every request with the OCI credentials of the
 ``client_config`` (API key, session token, instance principal or resource principal) and targets
-the configured compartment. This requires the ``oci-openai`` package:
+the configured compartment. This requires the ``oci-genai-auth`` package:
 
 .. code-block:: bash
 
