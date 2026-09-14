@@ -8,12 +8,13 @@
 import json
 import sys
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, Literal, Optional
 
 import httpx
 import pytest
 
 from pyagentspec.llms.ociclientconfig import (
+    OciClientConfig,
     OciClientConfigWithApiKey,
     OciClientConfigWithInstancePrincipal,
     OciClientConfigWithResourcePrincipal,
@@ -34,9 +35,24 @@ from ..adapters.conftest import OCI_TEST_SESSION_PROFILE as SESSION_PROFILE
 
 pytest.importorskip("oci_genai_auth")
 
+try:
+    from pyagentspec.llms.ociclientconfig import OciClientConfigWithGenAiApiKey
+
+    GENAI_API_KEY_COMPONENT_AVAILABLE = True
+except ImportError:
+    # The component ships with a separate Agent Spec change (issue #265). Until it lands, a
+    # stand-in with the `auth_type` discriminator of the specification exercises the helper.
+    GENAI_API_KEY_COMPONENT_AVAILABLE = False
+
+    class OciClientConfigWithGenAiApiKey(OciClientConfig):  # type: ignore[no-redef]
+        auth_type: Literal["GENAI_API_KEY"] = "GENAI_API_KEY"  # type: ignore[assignment]
+        api_key: Optional[str] = None
+
+
 from pyagentspec.adapters._oci_openai_common import (  # noqa: E402
     COMPARTMENT_ID_HEADER,
     CONVERSATION_STORE_ID_HEADER,
+    OCI_GENAI_API_KEY_ENV_VAR,
     OCI_OPENAI_ACCEPT_ENCODING,
     OCI_OPENAI_PLACEHOLDER_API_KEY,
     create_oci_httpx_auth,
@@ -76,6 +92,14 @@ def _session_client_config(config_file: Path) -> OciClientConfigWithSecurityToke
         service_endpoint=SERVICE_ENDPOINT,
         auth_file_location=str(config_file),
         auth_profile=SESSION_PROFILE,
+    )
+
+
+def _genai_api_key_client_config(
+    api_key: Optional[str] = "sk-test-key",
+) -> OciClientConfigWithGenAiApiKey:
+    return OciClientConfigWithGenAiApiKey(
+        name="client_config", service_endpoint=SERVICE_ENDPOINT, api_key=api_key
     )
 
 
@@ -290,3 +314,93 @@ def test_non_oci_client_is_not_converted() -> None:
         )
         is None
     )
+
+
+def _assert_bearer_oci_request(request: httpx.Request, api_key: str) -> None:
+    assert request.url.host == "inference.generativeai.us-chicago-1.oci.oraclecloud.com"
+    assert request.url.path == "/openai/v1/chat/completions"
+    assert request.headers["authorization"] == f"Bearer {api_key}"
+    # No OCI request signature
+    assert "x-content-sha256" not in request.headers
+    assert request.headers[COMPARTMENT_ID_HEADER] == COMPARTMENT_ID
+    assert request.headers["accept-encoding"] == OCI_OPENAI_ACCEPT_ENCODING
+
+
+def test_genai_api_key_client_sends_a_bearer_token_without_request_signing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Generative AI API keys do not need the `oci-genai-auth` package at all
+    monkeypatch.setitem(sys.modules, "oci_genai_auth", None)
+    recorded: list[httpx.Request] = []
+    llm_config = _llm_config(
+        _genai_api_key_client_config("sk-test-key"), retry_policy=RetryPolicy(max_attempts=2)
+    )
+    client = create_oci_openai_client(
+        llm_config, is_async=False, transport=_mock_transport(recorded)
+    )
+    assert client.api_key == "sk-test-key"
+    assert str(client.base_url) == SERVICE_ENDPOINT + "/openai/v1/"
+    assert client.max_retries == 2
+
+    completion = client.chat.completions.create(
+        model="meta.llama-3.3-70b-instruct", messages=[{"role": "user", "content": "ping"}]
+    )
+    assert completion.choices[0].message.content == "pong"
+    assert len(recorded) == 1
+    _assert_bearer_oci_request(recorded[0], "sk-test-key")
+
+
+@pytest.mark.anyio
+async def test_async_genai_api_key_client_sends_a_bearer_token() -> None:
+    recorded: list[httpx.Request] = []
+    llm_config = _llm_config(_genai_api_key_client_config("sk-test-key"))
+    client = create_oci_openai_client(
+        llm_config, is_async=True, transport=_mock_transport(recorded)
+    )
+    completion = await client.chat.completions.create(
+        model="meta.llama-3.3-70b-instruct", messages=[{"role": "user", "content": "ping"}]
+    )
+    assert completion.choices[0].message.content == "pong"
+    _assert_bearer_oci_request(recorded[0], "sk-test-key")
+
+
+def test_genai_api_key_is_read_from_the_environment_when_unset(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    llm_config = _llm_config(_genai_api_key_client_config(api_key=None))
+    monkeypatch.setenv(OCI_GENAI_API_KEY_ENV_VAR, "sk-from-env")
+    client = create_oci_openai_client(llm_config, is_async=False, transport=_mock_transport([]))
+    assert client.api_key == "sk-from-env"
+
+    monkeypatch.delenv(OCI_GENAI_API_KEY_ENV_VAR)
+    with pytest.raises(ValueError, match=OCI_GENAI_API_KEY_ENV_VAR):
+        create_oci_openai_client(llm_config, is_async=False)
+
+
+def test_genai_api_key_config_cannot_create_a_signing_auth() -> None:
+    with pytest.raises(ValueError, match="bearer token"):
+        create_oci_httpx_auth(_genai_api_key_client_config())
+
+
+def test_genai_api_key_client_maps_back_without_the_key() -> None:
+    llm_config = _llm_config(
+        _genai_api_key_client_config("sk-test-key"), conversation_store_id="ocid1.store.oc1..x"
+    )
+    client = create_oci_openai_client(llm_config, is_async=False)
+    rebuilt = oci_genai_config_from_openai_client(
+        client,
+        name="oci_llm",
+        model_id="meta.llama-3.3-70b-instruct",
+        api_type=OciAPIType.OPENAI_CHAT_COMPLETIONS,
+    )
+    if not GENAI_API_KEY_COMPONENT_AVAILABLE:
+        # Older Agent Spec versions have no component for this configuration
+        assert rebuilt is None
+        return
+    assert rebuilt is not None
+    assert isinstance(rebuilt.client_config, OciClientConfigWithGenAiApiKey)
+    assert rebuilt.client_config.api_key is None
+    assert rebuilt.client_config.service_endpoint == SERVICE_ENDPOINT
+    assert rebuilt.compartment_id == COMPARTMENT_ID
+    assert rebuilt.conversation_store_id == "ocid1.store.oc1..x"
+    assert "sk-test-key" not in rebuilt.to_json()

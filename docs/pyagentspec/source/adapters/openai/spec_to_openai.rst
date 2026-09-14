@@ -26,7 +26,10 @@ OCI request signing:
 The adapter honours the ``model_id``, ``compartment_id``, ``conversation_store_id`` and
 ``retry_policy`` (mapped to the client retries and timeout) of the configuration, and the four
 ``client_config`` authentication types (API key, session token, instance principal and resource
-principal). The ``api_type`` selects the SDK model: ``openai_responses`` gives an
+principal). With an ``OciClientConfigWithGenAiApiKey`` (an OCI Generative AI API key) the client
+sends the key as a bearer token instead of signing requests, so the ``oci`` extra is not needed;
+the key is read from the configuration or from the ``OCI_GENAI_API_KEY`` environment variable.
+The ``api_type`` selects the SDK model: ``openai_responses`` gives an
 ``OpenAIResponsesModel``, any other value an ``OpenAIChatCompletionsModel``.
 
 Limitations of the OpenAI-compatible API of OCI Generative AI:

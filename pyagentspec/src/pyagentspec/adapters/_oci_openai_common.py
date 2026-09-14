@@ -7,10 +7,12 @@
 """Helpers to reach OCI Generative AI through its OpenAI-compatible API with the ``openai`` SDK.
 
 The OCI Generative AI service exposes OpenAI-compatible ``chat/completions`` and ``responses``
-endpoints under ``<service_endpoint>/openai/v1``. Requests must carry an OCI request signature
-and the target compartment in the ``opc-compartment-id`` header. The request signing is provided
-by the ``oci-genai-auth`` package, which offers ``httpx.Auth`` implementations for the four OCI
-authentication types modelled by the Agent Spec ``OciClientConfig`` components.
+endpoints under ``<service_endpoint>/openai/v1``. Requests are authenticated either with an OCI
+request signature (plus the target compartment in the ``opc-compartment-id`` header) or with an
+OCI Generative AI API key sent as a bearer token. The request signing is provided by the
+``oci-genai-auth`` package, which offers ``httpx.Auth`` implementations for the four OCI IAM
+authentication types modelled by the Agent Spec ``OciClientConfig`` components; Generative AI API
+keys (``auth_type`` ``GENAI_API_KEY``) need no additional package.
 
 These helpers are shared by the runtime adapters built on the ``openai`` SDK (AutoGen, Microsoft
 Agent Framework and OpenAI Agents), so that an ``OciGenAiConfig`` can be executed by those
@@ -41,7 +43,13 @@ if TYPE_CHECKING:
     from openai import AsyncOpenAI, OpenAI
 
 OCI_OPENAI_PLACEHOLDER_API_KEY = "<NOTUSED>"
-"""API key placeholder: OCI requests are authenticated with a request signature, not a key."""
+"""API key placeholder for signing clients: their requests carry a request signature, not a key."""
+
+OCI_GENAI_API_KEY_AUTH_TYPE = "GENAI_API_KEY"
+"""``auth_type`` of the client configuration authenticating with an OCI Generative AI API key."""
+
+OCI_GENAI_API_KEY_ENV_VAR = "OCI_GENAI_API_KEY"
+"""Environment variable read when a Generative AI API key configuration leaves ``api_key`` unset."""
 
 OCI_OPENAI_BASE_PATH = "/openai/v1"
 """Path of the OpenAI-compatible API under the OCI Generative AI service endpoint."""
@@ -135,8 +143,35 @@ def validate_oci_openai_compatible_config(
         )
 
 
+def uses_genai_api_key(client_config: OciClientConfig) -> bool:
+    """Whether the client configuration authenticates with an OCI Generative AI API key.
+
+    Generative AI API keys are sent as a bearer token (``Authorization: Bearer sk-...``) instead
+    of an OCI request signature. The check relies on the ``auth_type`` discriminator defined by
+    the ``OciClientConfig`` specification, so it does not depend on the
+    ``OciClientConfigWithGenAiApiKey`` class being available in the installed ``pyagentspec``.
+    """
+    return client_config.auth_type == OCI_GENAI_API_KEY_AUTH_TYPE
+
+
+def resolve_oci_genai_api_key(client_config: OciClientConfig) -> str:
+    """Return the Generative AI API key of a configuration, or the one of ``OCI_GENAI_API_KEY``."""
+    api_key = getattr(client_config, "api_key", None) or os.environ.get(OCI_GENAI_API_KEY_ENV_VAR)
+    if not api_key:
+        raise ValueError(
+            f"The OCI Generative AI API key of the client configuration '{client_config.name}' is "
+            f"not set: set its `api_key` or the {OCI_GENAI_API_KEY_ENV_VAR} environment variable."
+        )
+    return str(api_key)
+
+
 def create_oci_httpx_auth(client_config: OciClientConfig) -> "httpx.Auth":
     """Create the ``httpx`` authentication signing requests for an OCI client configuration."""
+    if uses_genai_api_key(client_config):
+        raise ValueError(
+            "OCI Generative AI API keys are sent as a bearer token, not as an OCI request "
+            "signature; create the client with `create_oci_openai_client` instead."
+        )
     oci_genai_auth = ensure_oci_openai_installed()
     if isinstance(client_config, OciClientConfigWithSecurityToken):
         return oci_genai_auth.OciSessionAuth(  # type: ignore[no-any-return]
@@ -184,19 +219,20 @@ def create_oci_openai_httpx_client(
     is_async: bool,
     **httpx_client_kwargs: Any,
 ) -> Union["httpx.Client", "httpx.AsyncClient"]:
-    """Create the signing ``httpx`` client used by the ``openai`` SDK for an OCI configuration.
+    """Create the ``httpx`` client used by the ``openai`` SDK for an OCI configuration.
 
-    The client signs every request with the OCI credentials of the configuration and carries the
-    compartment (and conversation store) headers. Extra keyword arguments are passed to the
-    ``httpx`` client constructor.
+    The client signs every request with the OCI credentials of the configuration, unless the
+    configuration authenticates with a Generative AI API key, which the ``openai`` client sends
+    as a bearer token. It carries the compartment (and conversation store) headers. Extra keyword
+    arguments are passed to the ``httpx`` client constructor.
     """
     from openai import DefaultAsyncHttpxClient, DefaultHttpxClient
 
     client_class = DefaultAsyncHttpxClient if is_async else DefaultHttpxClient
+    if not uses_genai_api_key(llm_config.client_config):
+        httpx_client_kwargs["auth"] = create_oci_httpx_auth(llm_config.client_config)
     return client_class(  # type: ignore[no-any-return]
-        auth=create_oci_httpx_auth(llm_config.client_config),
-        headers=get_oci_openai_headers(llm_config),
-        **httpx_client_kwargs,
+        headers=get_oci_openai_headers(llm_config), **httpx_client_kwargs
     )
 
 
@@ -219,8 +255,13 @@ def create_oci_openai_client(
     """
     from openai import AsyncOpenAI, OpenAI
 
+    api_key = (
+        resolve_oci_genai_api_key(llm_config.client_config)
+        if uses_genai_api_key(llm_config.client_config)
+        else OCI_OPENAI_PLACEHOLDER_API_KEY
+    )
     client_kwargs: Dict[str, Any] = {
-        "api_key": OCI_OPENAI_PLACEHOLDER_API_KEY,
+        "api_key": api_key,
         "base_url": get_oci_openai_base_url(llm_config),
         **get_oci_openai_retry_kwargs(llm_config.retry_policy),
     }
@@ -269,6 +310,43 @@ def oci_client_config_from_httpx_auth(
     return None
 
 
+def _genai_api_key_client_config(*, name: str, service_endpoint: str) -> Optional[OciClientConfig]:
+    """Build an ``OciClientConfigWithGenAiApiKey`` without its key, or ``None`` if unavailable.
+
+    The component is introduced by a separate Agent Spec change (#265); older ``pyagentspec``
+    versions cannot represent the configuration. The key is a sensitive field and is never
+    copied back from a client.
+    """
+    from pyagentspec._component_registry import BUILTIN_CLASS_MAP
+
+    component_class = BUILTIN_CLASS_MAP.get("OciClientConfigWithGenAiApiKey")
+    if component_class is None:
+        return None
+    client_config = component_class.model_validate(
+        {"name": name, "service_endpoint": service_endpoint}
+    )
+    return cast(OciClientConfig, client_config)
+
+
+def oci_client_config_from_openai_client(
+    client: Union["OpenAI", "AsyncOpenAI"], *, service_endpoint: str, name: str
+) -> Optional[OciClientConfig]:
+    """Rebuild the Agent Spec client configuration from an ``openai`` client created for OCI.
+
+    Signing clients map back through their ``oci-genai-auth`` authentication. Clients without
+    ``httpx`` authentication that carry a real API key authenticate with an OCI Generative AI API
+    key. Returns ``None`` when the client cannot be mapped back.
+    """
+    http_client = getattr(client, "_client", None)
+    auth = getattr(http_client, "auth", None)
+    if auth is not None:
+        return oci_client_config_from_httpx_auth(auth, service_endpoint=service_endpoint, name=name)
+    api_key = getattr(client, "api_key", None)
+    if not api_key or api_key == OCI_OPENAI_PLACEHOLDER_API_KEY:
+        return None
+    return _genai_api_key_client_config(name=name, service_endpoint=service_endpoint)
+
+
 def oci_genai_config_from_openai_client(
     client: Union["OpenAI", "AsyncOpenAI"],
     *,
@@ -290,10 +368,8 @@ def oci_genai_config_from_openai_client(
     if not compartment_id:
         return None
     service_endpoint = base_url[: -len(OCI_OPENAI_BASE_PATH)]
-    client_config = oci_client_config_from_httpx_auth(
-        getattr(http_client, "auth", None),
-        service_endpoint=service_endpoint,
-        name=f"{name}_client_config",
+    client_config = oci_client_config_from_openai_client(
+        client, service_endpoint=service_endpoint, name=f"{name}_client_config"
     )
     if client_config is None:
         return None

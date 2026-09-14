@@ -23,6 +23,10 @@ the configured compartment. This requires the ``oci-genai-auth`` package:
 
     pip install "pyagentspec[agent-framework,oci]"
 
+With an ``OciClientConfigWithGenAiApiKey`` (an OCI Generative AI API key), the client sends the key
+as a bearer token instead: no request signing and no ``oci-genai-auth`` package are needed. The key
+is read from the configuration or from the ``OCI_GENAI_API_KEY`` environment variable.
+
 The ``api_type`` selects the Agent Framework client: ``oci`` and ``openai_chat_completions`` map
 to ``OpenAIChatCompletionClient``, ``openai_responses`` to ``OpenAIChatClient``. The ``model_id``,
 ``compartment_id``, ``conversation_store_id`` and ``retry_policy`` (client retries and request
