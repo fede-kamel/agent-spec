@@ -24,6 +24,7 @@ from pyagentspec.adapters._utils import (
     render_template,
     to_json_value,
 )
+from pyagentspec.adapters.langgraph._async_utils import run_async_in_sync
 from pyagentspec.adapters.langgraph._types import (
     BaseChatModel,
     Checkpointer,
@@ -39,7 +40,6 @@ from pyagentspec.adapters.langgraph._types import (
     interrupt,
     langgraph_graph,
 )
-from pyagentspec.adapters.langgraph.mcp_utils import run_async_in_sync
 from pyagentspec.agent import Agent as AgentSpecAgent
 from pyagentspec.flows.edges import DataFlowEdge
 from pyagentspec.flows.node import Node
@@ -682,7 +682,22 @@ class LlmNodeExecutor(NodeExecutor):
                 "type": "object",
                 "properties": {output.title: output.json_schema for output in node_outputs},
             }
-            self.structured_llm = self.llm.with_structured_output(json_schema)
+            try:
+                self.structured_llm = self.llm.with_structured_output(json_schema)
+            except (ValueError, TypeError, NotImplementedError) as exc:
+                # Providers that only accept BaseModel / TypedDict definitions
+                # surface low-level errors such as "Unsupported tool type
+                # <class 'dict'>". Turn that into an actionable configuration
+                # error at load time (oracle/agent-spec#232).
+                node_name = getattr(self.node, "name", "LlmNode")
+                raise ValueError(
+                    f"Cannot configure structured output for LlmNode '{node_name}': "
+                    f"{type(self.llm).__name__} rejected the JSON-schema output "
+                    f"definition ({exc}). Structured LlmNode outputs require a chat "
+                    "model whose `with_structured_output` accepts a JSON schema dict; "
+                    "for OCI Generative AI upgrade to langchain-oci>=0.3.0, or declare "
+                    "a single string output to disable structured generation."
+                ) from exc
 
     def _build_invoke_inputs(self, inputs: Dict[str, Any]) -> List[Dict[str, Any]]:
         prompt_template = self.node.prompt_template
