@@ -32,7 +32,7 @@ LANGGRAPH_DEPS = [
     "langchain>=1.3.9,<2.0.0",
     "langchain-openai>=1.2.1,<1.3.0",
     "langchain-ollama>=1.0.1",
-    "anyio>=4.10.0,<4.12.0",
+    "anyio>=4.14.2,<5.0.0",
     "httpx>0.28.0",
     "langgraph-swarm>=0.1.0",
     # 4rth party dependencies
@@ -46,7 +46,7 @@ LANGGRAPH_DEPS = [
 LANGGRAPH_FULL_DEPS = LANGGRAPH_DEPS + [
     # 3rd party dependencies (imported in code)
     "langchain-mcp-adapters>=0.2.2",
-    "langchain-oci>=0.2.6",
+    "langchain-oci>=0.3.0",  # JSON-schema tool definitions (structured LlmNode outputs)
     # 4rth party dependencies
     "cryptography>=50.0.0",  # needed to avoid CVE present in earlier versions
     "pyOpenSSL>=26.0.0,<27.0.0",  # needed to avoid CVE present in earlier versions
@@ -121,7 +121,7 @@ setup(
             "certifi>=2025.1.31; python_version < '3.14'",  # needed to avoid CVE present in earlier versions
             "cryptography>=50.0.0; python_version < '3.14'",  # needed to avoid CVE present in earlier versions
             # litellm is included to fix CVEs
-            "litellm>=1.84.0,<2.0; python_version < '3.14'",
+            "litellm>=1.84.0,!=1.107.0,<2.0; python_version < '3.14'",
             "urllib3>=2.7.0; python_version < '3.14'",  # needed to avoid CVE present in earlier versions
             "chromadb>1.5.9; python_version < '3.14'",  # # needed to avoid CVE present in earlier versions
             "uv>=0.11.15; python_version < '3.14'",  # needed to avoid CVE present in earlier versions
@@ -140,7 +140,7 @@ setup(
             # 4rth party dependencies
             "certifi>=2025.1.31; python_version < '3.14'",  # needed to avoid CVE present in earlier versions
             "pyOpenSSL>=26.0.0,<27.0.0; python_version < '3.14'",  # needed to avoid CVE present in earlier versions
-            "urllib3>=2.7.0; python_version < '3.14'",  # needed to avoid CVE present in earlier versions
+            "urllib3>=2.8.0; python_version < '3.14'",  # needed to avoid CVE present in earlier versions
         ],
         "wayflow_a2a": [
             # 3rd party dependencies (imported in code)
@@ -162,12 +162,12 @@ setup(
             # 4rth party dependencies
             "certifi>=2025.1.31",  # needed to avoid CVE present in earlier versions
             "cryptography>=50.0.0",  # needed to avoid CVE present in earlier versions
-            "urllib3>=2.7.0",  # needed to avoid CVE present in earlier versions
+            "urllib3>=2.8.0",  # needed to avoid CVE present in earlier versions
         ],
         "evaluation": [
             # 3rd party dependencies (imported in code)
-            "anyio>=4.10.0,<4.12.0",
-            "litellm>=1.84.0,<2.0; python_version < '3.14'",
+            "anyio>=4.14.2,<5.0.0",
+            "litellm>=1.104.2,!=1.107.0,<2.0",
             "pandas>=2.3.0,<3.0.0",
             "oci>=2.184.2",
             "numpy>=2.2.6",
@@ -175,7 +175,7 @@ setup(
             "certifi>=2025.1.31",  # needed to avoid CVE present in earlier versions
             "cryptography>=50.0.0",  # needed to avoid CVE present in earlier versions
             "pyOpenSSL>=26.0.0,<27.0.0",  # needed to avoid CVE present in earlier versions
-            "urllib3>=2.7.0",  # needed to avoid CVE present in earlier versions
+            "urllib3>=2.8.0",  # needed to avoid CVE present in earlier versions
         ],
     },
 )
